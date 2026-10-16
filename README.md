@@ -2,6 +2,10 @@
 
 Veritas is a multi-agent research assistant that answers questions by searching the web, reading real source pages, and cross-verifying claims across multiple sources before writing a final answer, with every claim traced back to a numbered citation. Built with LangGraph.
 
+<p align="center">
+  <img src="docs/landing-page.png" alt="Veritas landing page" width="800">
+</p>
+
 ## How it works
 
 ```mermaid
