@@ -1,6 +1,7 @@
 import base64
 import streamlit as st
 from veritas.graph import build_graph
+import re
 
 st.set_page_config(page_title="Veritas", page_icon="🔎", layout="wide")
 
@@ -95,6 +96,14 @@ def graph_dot(done, running):
     lines.append("}")
     return "\n".join(lines)
 
+def link_citations(text, sources):
+    def repl(m):
+        i = int(m.group(1))
+        if 1 <= i <= len(sources):
+            return f"[[{i}]]({sources[i - 1]['url']})"
+        return m.group(0)
+    return re.sub(r"\[(\d+)\]", repl, text)
+
 
 if "started" not in st.session_state:
     st.session_state.started = False
@@ -156,6 +165,7 @@ with left:
     with st.container(border=True):
         answer_box = st.empty()
         answer_box.caption("The answer will appear here.")
+        sources_box = st.empty()
 
 with right:
     st.markdown("#### Pipeline")
@@ -177,6 +187,7 @@ if run and question:
     app = build_graph()
     done = set()
     needs_clarification = False
+    sources  = []
     graph_box.graphviz_chart(graph_dot(done, "guardrail"))
 
     for step in app.stream(
@@ -187,9 +198,18 @@ if run and question:
             done.add(node_name)
             if update.get("needs_clarification"):
                 needs_clarification = True
+            if node_name == "fetch":
+                sources = update["sources"]
             if "answer" in update:
-                answer_box.markdown(update["answer"])
-
+                answer_box.markdown(link_citations(update["answer"], sources))
+                if sources:
+                    sources_box.markdown(
+                        "**Sources**\n\n"
+                        + "\n".join(
+                            f"{i}. [{s['title'] or s['url']}]({s['url']})"
+                            for i, s in enumerate(sources, start=1)
+                        )
+                    )
             if node_name == "writer" or needs_clarification:
                 done.add("stop")
                 running = None
