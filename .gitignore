@@ -14,3 +14,6 @@ chroma_db/
 # OS / editor
 .DS_Store
 .vscode/
+
+
+test/nile_sources.json
