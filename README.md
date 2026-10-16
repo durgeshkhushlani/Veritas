@@ -77,6 +77,10 @@ Run the graph:
 uv run python test/test_graph.py
 ```
 
+<p align="center">
+  <img src="docs/graph-page.png" alt="Veritas landing page" width="800">
+</p>
+
 ## Known issues
 
 Failures found while building, with causes and fixes, are logged in [FAILURES.md](FAILURES.md).
