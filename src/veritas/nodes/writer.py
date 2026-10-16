@@ -13,6 +13,7 @@ Rules:
 -If the sources contradict each other, say so explicitlyy and attribute each version to its source. 
 -If the sources do not contain the answer, say you could not find it. 
 -Be concise. Use Markdown. 
+-Only flag claims that give different values for the SAME quantity. Do not flag differing opinions, history of a debate, or different measurement methods unless the values conflict
 
 QUESTION: {question}
 
@@ -31,7 +32,7 @@ def writer_node(state):
         for i, s in enumerate(sources, start=1)
     )
 
-    contradictions = state.get("contradictions") or "None found."
+    contradictions = state.get("all_contradictions") or "None found."
 
     response = client.models.generate_content(
         model="gemini-3.5-flash-lite",

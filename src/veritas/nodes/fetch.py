@@ -22,7 +22,16 @@ def _fetch_one(result):
     return {"url": url, "title": result.get("title", ""), "content": text}
   
 def fetch_and_read_node(state):
-    with ThreadPoolExecutor(max_workers=5) as pool:
-        fetched = list(pool.map(_fetch_one, state["search_results"]))
+    existing = state.get("sources", [])
+    seen = {s["url"] for s in existing}
 
-    return {"sources": [s for s in fetched if s]}
+    unique = []
+    for r in state["search_results"]:
+        if r["url"] not in seen:
+            seen.add(r["url"])
+            unique.append(r)
+
+    with ThreadPoolExecutor(max_workers=5) as pool:
+        fetched = list(pool.map(_fetch_one, unique))
+
+    return {"sources": existing + [s for s in fetched if s]}

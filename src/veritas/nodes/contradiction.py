@@ -1,20 +1,27 @@
 import os, json 
 from dotenv import load_dotenv
 from google import genai
+from google.genai import types
 
 load_dotenv()
 client = genai.Client(api_key=os.environ["GEMINI_API_KEY"])
+CHAR_LIMIT = 3000
 
-CONTRADICTION_PROMPT = """You are fact-checking a set of sources about the same question. 
-Read the source below. Identify any factual claims that DIRECTLY CONTRADICT each other (different dates, different numbers, opposing conclusions). Minor differences in phrasing or emphasis are NOT contradictions.
 
-If there are no real contradictions, return an empty array.
+CONTRADICTION_PROMPT = """You are fact-checking several sources that answer the same question.
 
-Return ONLY a JSON array of objects, no markdown fences. Each object: 
+Find places where two sources CONFLICT:
+- they give different values for the same quantity (dates, numbers, lengths), or
+- they give opposite answers to the same question (e.g. one says A is longer, another says B is longer).
+
+Do NOT flag sources that agree, rewordings of the same fact, or a source that only mentions that a debate exists.
+
+If there are no conflicts, return an empty array.
+
+Return ONLY a JSON array of objects. Each object:
 {{"claim_a": "...", "source_a": "url", "claim_b": "...", "source_b": "url"}}
 
-
-SOURCES: 
+SOURCES:
 {sources}
 """
 
@@ -31,12 +38,24 @@ def contradiction_check_node(state):
     sources = state["sources"]
 
     formatted = "\n\n".join(
-        f"[{s['url']}]\n{s['content'][:1500]}" for s in sources
+        f"[{s['url']}]\n{s['content'][:CHAR_LIMIT]}" for s in sources
     )
 
     response = client.models.generate_content(
         model="gemini-3.5-flash-lite",
         contents=CONTRADICTION_PROMPT.format(sources=formatted),
+        config=types.GenerateContentConfig(
+            temperature=0,
+            response_mime_type="application/json",
+        ),
     )
     contradictions = json.loads(strip_fences(response.text))
-    return {"contradictions": contradictions}
+
+    previous = state.get("all_contradictions", [])
+    seen = {(c["claim_a"], c["claim_b"]) for c in previous}
+    new = [c for c in contradictions if (c["claim_a"], c["claim_b"]) not in seen]
+
+    return {
+        "contradictions": contradictions,
+        "all_contradictions": previous + new,
+    }

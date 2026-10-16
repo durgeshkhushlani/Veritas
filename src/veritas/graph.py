@@ -5,6 +5,7 @@ from veritas.nodes.search import search_node
 from veritas.nodes.fetch import fetch_and_read_node
 from veritas.nodes.contradiction import contradiction_check_node
 from veritas.nodes.writer import writer_node
+from veritas.nodes.refine import refine_node
 
 MAX_RETRIES = 2
 
@@ -23,7 +24,7 @@ def build_graph():
     g.add_node("search", search_node)
     g.add_node("fetch", fetch_and_read_node)
     g.add_node("check", contradiction_check_node)
-    g.add_node("bump_retry", bump_retry)
+    g.add_node("refine", refine_node)
     g.add_node("writer", writer_node)
 
     g.add_edge(START, "planner")
@@ -31,9 +32,9 @@ def build_graph():
     g.add_edge("search", "fetch")
     g.add_edge("fetch", "check")
     g.add_conditional_edges(
-        "check", route_after_check, {"retry": "bump_retry", "write": "writer"}
+        "check", route_after_check, {"retry": "refine", "write": "writer"}
     )
-    g.add_edge("bump_retry", "search")
+    g.add_edge("refine", "search")
     g.add_edge("writer", END)
 
     return g.compile()
