@@ -1,7 +1,9 @@
 import base64
+import re
 import streamlit as st
 from veritas.graph import build_graph
-import re
+from veritas.faithfulness import judge_faithfulness
+from veritas.pipelines_view import show_graph, legend_html, NEXT
 
 st.set_page_config(page_title="Veritas", page_icon="🔎", layout="wide")
 
@@ -11,7 +13,7 @@ st.markdown(
 @import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600&family=Sora:wght@500;600;700;800&display=swap');
 
 #MainMenu, footer {visibility: hidden;}
-.block-container {padding-top: 2.5rem; max-width: 1300px;}
+.block-container {padding-top: 4.5rem; max-width: 1300px;}
 
 .stApp, .stApp p, .stApp label, .stApp input, .stApp button, .stApp li {
     font-family: 'Inter', sans-serif;
@@ -22,79 +24,43 @@ st.markdown(
 
 .title {
     font-family: 'Sora', sans-serif;
-    font-size: 2.6rem; font-weight: 800; letter-spacing: 0.22em; margin: 0;
+    font-size: 2.2rem; font-weight: 800; letter-spacing: 0.22em; margin: 0;
     text-transform: uppercase;
     background: linear-gradient(90deg, #93c5fd 0%, #a78bfa 50%, #f0abfc 100%);
     -webkit-background-clip: text; -webkit-text-fill-color: transparent;
     filter: drop-shadow(0 0 22px rgba(167,139,250,0.45));
 }
 .tagline {
-    font-family: 'Inter', sans-serif; font-weight: 400;
-    color: #9ca3af; margin: 0.4rem 0 1.6rem 0; font-size: 1.05rem;
+    color: #9ca3af; margin: 0.3rem 0 1.2rem 0; font-size: 1rem;
 }
-
-.legend {display: flex; gap: 18px; flex-wrap: wrap; margin: 4px 0 10px 0;
-         color: #9ca3af; font-size: 0.85rem;}
+.panel-title {
+    font-family: 'Sora', sans-serif; font-weight: 600; font-size: 0.8rem;
+    letter-spacing: 0.18em; text-transform: uppercase; color: #a5b4fc;
+    margin: 0 0 0.8rem 0;
+}
+.legend {display: flex; gap: 18px; flex-wrap: wrap; margin: 0 0 6px 0;
+         color: #9ca3af; font-size: 0.82rem;}
 .legend span.dot {display: inline-block; width: 10px; height: 10px;
                   border-radius: 50%; margin-right: 6px;}
 
 div[data-testid="stTextInput"] input {
-    border-radius: 14px; padding: 0.85rem 1.1rem; font-size: 1.05rem;
+    border-radius: 14px; padding: 0.8rem 1.1rem; font-size: 1.05rem;
 }
 div.stButton > button {
     border-radius: 14px; padding: 0.6rem 1.9rem; font-weight: 600;
-    font-family: 'Sora', sans-serif; letter-spacing: 0.3px;
+    font-family: 'Sora', sans-serif; letter-spacing: 0.3px; width: 100%;
     background: linear-gradient(90deg, #3b82f6, #8b5cf6);
     color: white; border: none;
     box-shadow: 0 6px 22px rgba(99,102,241,0.35);
 }
 div.stButton > button:hover {filter: brightness(1.12); color: white;}
+div[data-testid="stMetricValue"] {font-family: 'Sora', sans-serif;}
 </style>
 """,
     unsafe_allow_html=True,
 )
 
-NODES = ["guardrail", "planner", "search", "fetch", "check", "refine", "writer", "stop"]
-EDGES = [
-    ("guardrail", "planner", "clear"),
-    ("guardrail", "stop", "unclear"),
-    ("planner", "search", ""),
-    ("search", "fetch", ""),
-    ("fetch", "check", ""),
-    ("check", "writer", "no conflict"),
-    ("check", "refine", "conflict"),
-    ("refine", "search", "retry"),
-    ("writer", "stop", ""),
-]
-# the node that runs after each one (check is left out: it can go two ways)
-NEXT = {"guardrail": "planner", "planner": "search", "search": "fetch",
-        "fetch": "check", "refine": "search"}
-
-GREEN, ORANGE, GREY = "#22c55e", "#f59e0b", "#374151"
-
-
-def graph_dot(done, running):
-    lines = [
-        "digraph G {",
-        'bgcolor="transparent";',
-        "rankdir=TB; nodesep=0.45; ranksep=0.45;",
-        'node [shape=box, style="rounded,filled", fontname="Inter, Helvetica, Arial", '
-        'fontsize=13, fontcolor="white", penwidth=0, margin="0.25,0.12"];',
-        'edge [color="#6b7280", fontcolor="#9ca3af", fontname="Inter, Helvetica, Arial", fontsize=11];',
-    ]
-    for n in NODES:
-        if n == running:
-            color = ORANGE
-        elif n in done:
-            color = GREEN
-        else:
-            color = GREY
-        label = "end" if n == "stop" else n
-        lines.append(f'{n} [label="{label}", fillcolor="{color}"];')
-    for a, b, label in EDGES:
-        lines.append(f'{a} -> {b} [label="{label}"];')
-    lines.append("}")
-    return "\n".join(lines)
+PANEL_HEIGHT = 560
 
 def link_citations(text, sources):
     def repl(m):
@@ -147,6 +113,28 @@ if not st.session_state.started:
             st.rerun()
     st.stop()
 
+with open("assets/bg2.jpg", "rb") as f:
+    bg2 = base64.b64encode(f.read()).decode()
+
+st.markdown(
+    f"""
+<style>
+.stApp {{
+    background:
+        linear-gradient(rgba(10,12,20,0.78), rgba(10,12,20,0.9)),
+        url("data:image/jpeg;base64,{bg2}") center / cover no-repeat fixed;
+}}
+div[data-testid="stVerticalBlockBorderWrapper"] {{
+    background: rgba(10,12,20,0.55);
+    backdrop-filter: blur(8px);
+    border-radius: 16px;
+}}
+</style>
+""",
+    unsafe_allow_html=True,
+)
+
+# ---------- header + question row ----------
 st.markdown('<p class="title">Veritas</p>', unsafe_allow_html=True)
 st.markdown(
     '<p class="tagline">Ask a question. Veritas searches, reads, and cross-checks '
@@ -154,42 +142,46 @@ st.markdown(
     unsafe_allow_html=True,
 )
 
-left, right = st.columns([1, 1], gap="large")
-
-with left:
+q_col, b_col = st.columns([6, 1], gap="small")
+with q_col:
     question = st.text_input(
         "Question", placeholder="e.g. When was Google launched?",
         label_visibility="collapsed",
     )
+with b_col:
     run = st.button("Search")
-    with st.container(border=True):
+
+st.write("")
+
+# ---------- two equal halves ----------
+left, right = st.columns(2, gap="large")
+
+with left:
+    with st.container(border=True, height=PANEL_HEIGHT):
+        st.markdown('<p class="panel-title">Answer</p>', unsafe_allow_html=True)
         answer_box = st.empty()
         answer_box.caption("The answer will appear here.")
-        sources_box = st.empty()
+        st.write("")
+        score_box = st.empty()
+        extras_box = st.empty()
 
 with right:
-    st.markdown("#### Pipeline")
-    st.markdown(
-        f"""
-<div class="legend">
-<div><span class="dot" style="background:{GREEN}"></span>Finished</div>
-<div><span class="dot" style="background:{ORANGE}"></span>Running next</div>
-<div><span class="dot" style="background:{GREY}"></span>Not reached</div>
-</div>
-""",
-        unsafe_allow_html=True,
-    )
-    graph_box = st.empty()
-    status_box = st.empty()
-    graph_box.graphviz_chart(graph_dot(set(), None))
+    with st.container(border=True, height=PANEL_HEIGHT):
+        st.markdown('<p class="panel-title">Pipeline</p>', unsafe_allow_html=True)
+        st.markdown(legend_html(), unsafe_allow_html=True)  
+        graph_box = st.empty()
+        status_box = st.empty()
+        show_graph(graph_box, set(), None)
 
+# ---------- run ----------
 if run and question:
     app = build_graph()
     done = set()
     needs_clarification = False
-    sources  = []
-    graph_box.graphviz_chart(graph_dot(done, "guardrail"))
-
+    sources = []
+    final_answer = ""
+    show_graph(graph_box, done, "guardrail")
+    
     for step in app.stream(
         {"question": question, "retry_count": 0},
         stream_mode="updates",
@@ -201,23 +193,35 @@ if run and question:
             if node_name == "fetch":
                 sources = update["sources"]
             if "answer" in update:
-                answer_box.markdown(link_citations(update["answer"], sources))
-                if sources:
-                    sources_box.markdown(
-                        "**Sources**\n\n"
-                        + "\n".join(
-                            f"{i}. [{s['title'] or s['url']}]({s['url']})"
-                            for i, s in enumerate(sources, start=1)
-                        )
-                    )
+                final_answer = update["answer"]
+                answer_box.markdown(link_citations(final_answer, sources))
+
             if node_name == "writer" or needs_clarification:
                 done.add("stop")
                 running = None
             else:
                 running = NEXT.get(node_name)
-            graph_box.graphviz_chart(graph_dot(done, running))
-
+            show_graph(graph_box, done, running)
+            
     if needs_clarification:
         status_box.warning("Needs clarification")
     else:
         status_box.success("Done")
+        if final_answer and sources:
+            score_box.caption("Checking the answer against its sources...")
+            report = judge_faithfulness(final_answer, sources)
+
+            with score_box.container():
+                if report["score"] is None:
+                    st.caption("Faithfulness: no claims to check")
+                else:
+                    st.metric("Faithfulness", f"{report['score']:.0%}")
+
+            icons = {"supported": "✅", "partial": "🟡", "unsupported": "❌", "uncited": "⚪"}
+            with extras_box.container():
+                with st.expander("Sources"):
+                    for i, s in enumerate(sources, start=1):
+                        st.markdown(f"{i}. [{s['title'] or s['url']}]({s['url']})")
+                with st.expander("Claim by claim"):
+                    for c in report["claims"]:
+                        st.markdown(f"{icons.get(c['verdict'], '•')} {c['claim']}")
