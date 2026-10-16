@@ -4,9 +4,25 @@ Veritas is a multi-agent research assistant that answers questions by searching 
 
 ## How it works
 
-```
-question → planner → search → fetch → check ─┬─ conflict & retries left → refine → search
-                                              └─ otherwise → writer → cited answer
+```mermaid
+flowchart TD
+    Q([Question]) --> G{Guardrail}
+    G -- unclear --> C([Ask user to clarify])
+    G -- clear --> P[Planner]
+    P --> S[Search]
+    S --> F[Fetch and read]
+    F --> K{Contradiction check}
+    K -- conflict, retries left --> R[Refine queries]
+    R --> S
+    K -- no conflict, or retries used up --> W[Writer]
+    W --> A([Cited answer])
+
+    classDef start fill:#1e3a8a,stroke:#60a5fa,color:#fff
+    classDef decision fill:#78350f,stroke:#f59e0b,color:#fff
+    classDef step fill:#14532d,stroke:#22c55e,color:#fff
+    class Q,A,C start
+    class G,K decision
+    class P,S,F,R,W step
 ```
 
 - **planner:** splits a question into 1-3 focused search queries (a simple fact stays one query)
@@ -20,15 +36,23 @@ question → planner → search → fetch → check ─┬─ conflict & retries
 
 - [x] Core pipeline: planner, search, fetch, contradiction check, refine loop, writer
 - [x] Retry cap verified (stops after 2 retries)
-- [ ] Guardrail for unresolved references ("it", "they")
-- [ ] Streamlit UI with clickable citations
-- [ ] Faithfulness evaluation harness
+- [x] Guardrail for unresolved references ("it", "they"), asks for clarification before searching
+- [x] Streamlit UI with a landing page, a live pipeline graph, and clickable `[n]` citations
+- [x] Faithfulness evaluation: per-claim judge, with tests on known cases
 
-## Out of scope (v1)
+## Evaluation
 
-- Multi-turn conversations (planned for v1.1)
-- Non-English queries
-- PDF or image input
+`src/veritas/faithfulness.py` checks whether each claim in an answer is backed by the source it cites.
+
+1. An LLM judge splits the answer into single-fact claims, keeping their `[n]` markers.
+2. The code reads the citation numbers from the claim text itself, so the model can't invent a citation. A claim with no `[n]` is marked `uncited`.
+3. The judge marks each claim `supported`, `partial` or `unsupported`, using only the cited source.
+4. Score = supported claims ÷ all claims.
+
+Tested on fixed cases with known answers (`test/test_faithfulness.py`), and with a sabotage test (`test/eval_sabotage.py`) that changes the dates in a real answer and expects the score to fall. It fell from 1.0 to 0.0.
+
+**Limits:** the judge is an LLM, so it can be wrong. Subtle errors (a wrong month, a close number) and claims citing several sources have not been tested yet.
+
 
 ## Setup
 
