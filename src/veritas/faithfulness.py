@@ -10,9 +10,13 @@ CHAR_LIMIT = 3000  # same text the writer saw
 
 JUDGE_PROMPT = """You are checking whether an answer is faithful to its numbered sources.
 
-Split the ANSWER into separate factual claims. Copy each claim from the answer
-exactly as written, INCLUDING any [n] citation markers attached to it. Do not add
-citation markers that are not in the answer.
+You are checking whether an answer is faithful to its numbered sources.
+
+Split the ANSWER into ATOMIC claims: each claim states exactly ONE fact, such as one
+date, one number, or one name. If a sentence contains several facts, make one claim
+per fact. Every sentence of the answer must be covered, including the first one.
+Copy each claim from the answer as written, INCLUDING the [n] citation markers
+that apply to it. Do not add citation markers that are not in the answer.
 
 For each claim, judge it ONLY against the source(s) named by its [n] markers,
 never against your own knowledge:
