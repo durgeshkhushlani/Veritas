@@ -7,10 +7,14 @@ for step in app.stream(
     stream_mode="updates",
 ):
     for node_name, update in step.items():
-        print(f"✔ {node_name} done", flush=True)
-        if node_name == "fetch":
-            for s in update["sources"]:
-                c = s["content"]
-                print(s["url"], "| length:", len(c), "| 6,695 at:", c.find("6,695"), "| 6,575 at:", c.find("6,575"), flush=True)
-        if node_name == "check":
-            print("   contradictions:", update["contradictions"], flush=True)
+        if node_name == "refine":
+            print(f"\n>>> RETRY {update['retry_count']} <<<  new queries: {update['sub_queries']}", flush=True)
+        elif node_name == "fetch":
+            print(f"✔ fetch done -> {len(update['sources'])} sources total", flush=True)
+        elif node_name == "check":
+            print(f"✔ check done -> {len(update['contradictions'])} contradictions", flush=True)
+        elif node_name == "writer":
+            print("✔ writer done\n")
+            print(update["answer"])
+        else:
+            print(f"✔ {node_name} done", flush=True)
