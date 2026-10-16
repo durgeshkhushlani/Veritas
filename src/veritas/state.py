@@ -10,5 +10,6 @@ class ResearchState(TypedDict):
     retry_count: int
     answer: str
     faithfulness_score: float
+    needs_clarification: bool
 
 

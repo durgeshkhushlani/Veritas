@@ -6,6 +6,7 @@ from veritas.nodes.fetch import fetch_and_read_node
 from veritas.nodes.contradiction import contradiction_check_node
 from veritas.nodes.writer import writer_node
 from veritas.nodes.refine import refine_node
+from veritas.nodes.guardrail import guardrail_node
 
 MAX_RETRIES = 2
 
@@ -17,6 +18,11 @@ def route_after_check(state):
         return "retry"
     return "write"
 
+def route_after_guardrail(state):
+    if state["needs_clarification"]:
+        return "stop"
+    return "continue"
+
 def build_graph(): 
     g = StateGraph(ResearchState)
 
@@ -26,8 +32,12 @@ def build_graph():
     g.add_node("check", contradiction_check_node)
     g.add_node("refine", refine_node)
     g.add_node("writer", writer_node)
+    g.add_node("guardrail", guardrail_node)
 
-    g.add_edge(START, "planner")
+    g.add_edge(START, "guardrail")
+    g.add_conditional_edges(
+        "guardrail", route_after_guardrail, {"stop": END, "continue": "planner"}
+    )
     g.add_edge("planner", "search")
     g.add_edge("search", "fetch")
     g.add_edge("fetch", "check")
